@@ -1,10 +1,20 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
-#[macro_use] extern crate rocket;
+#[macro_use]
+extern crate elastic_derive;
+#[macro_use]
+extern crate serde_json;
+extern crate elastic;
 
-use dotenv;
-use envy;
+#[macro_use]
+extern crate rocket;
+extern crate envy;
+
 use serde::Deserialize;
+use serde_json::Value;
+use elastic::client;
+use elastic::http;
+use elastic::*;
 
 #[derive(Deserialize, Debug)]
 struct DBConfig {
@@ -12,18 +22,29 @@ struct DBConfig {
     db_password: String,
 }
 
+struct DbClient {
+    db: client::Client<http::sender::SyncSender>
+}
+
 #[post("/clip")]
 fn index() -> &'static str {
     "Hello, world!"
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     dotenv::dotenv().expect("Failed to read .env file");
 
     match envy::from_env::<DBConfig>() {
         Ok(config) => println!("{:?}", config),
-        Err(e) => println!("Couldn't read mailer config ({})", e),
+        Err(_) => println!("Couldn't load the db config"),
     };
 
-    rocket::ignite().mount("/", routes![index]).launch();
+    let db = SyncClient::builder().build()?;
+
+    rocket::ignite()
+        .manage(DbClient { db: db })
+        .mount("/", routes![index])
+        .launch();
+
+    return Ok(());
 }
